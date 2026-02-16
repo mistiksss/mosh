@@ -5,7 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Админ-панель</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='notifications.css') }}">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <style>
+    .reportBox{margin-top:12px; display:flex; flex-direction:column; gap:10px;}
+    .textarea{width:100%; padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.08); color:#fff; font:inherit; resize:vertical;}
+    .textarea::placeholder{color:rgba(255,255,255,.6);}
+    .reportActions{display:flex; justify-content:flex-end;}
+    .reportListTitle{margin-top:6px; font-weight:700;}
+    .listItem{border:1px solid rgba(255,255,255,.14); border-radius:14px; padding:12px; background:rgba(255,255,255,.06);}
+    .muted{opacity:.7; font-size:12px;}
+  </style>
 </head>
 <body>
   <main>
@@ -15,7 +26,10 @@
           <div class="title">Админ-панель</div>
           <div class="subtitle">Учет и аналитика</div>
         </div>
-        <a class="logout" href="{{ url_for('logout') }}">Выйти</a>
+        <div class="headerRight" style="display:flex;align-items:center;gap:12px;">
+          {% include "_notifications_widget.html" %}
+          <a class="logout" href="{{ url_for('logout') }}">Выйти</a>
+        </div>
       </div>
 
       <div class="cards">
@@ -35,6 +49,7 @@
 
       <div class="tabs">
         <button class="tab active" data-tab="stats">Статистика</button>
+        <button class="tab" data-tab="reports">Отчёты</button>
         <button class="tab" data-tab="req">Заявки (<span id="reqCount">0</span>)</button>
         <div class="spacer"></div>
         <div class="range">
@@ -49,17 +64,34 @@
         <div class="panelHead">
           <div class="panelTitle">Статистика оплат и посещаемости</div>
           <div class="actions">
-            <a class="link" id="repNutrition" href="#">Отчет по питанию (CSV)</a>
-            <a class="link" id="repCosts" href="#">Отчет по затратам (CSV)</a>
-          </div>
+            </div>
         </div>
         <div class="chartBox">
           <canvas id="chart"></canvas>
         </div>
-        <div class="hint">Синий: выручка, красный: расходы, серый: посещаемость.</div>
+        <div class="hint">Синий: выручка, красный: расходы, оранжевый: посещаемость.</div>
       </section>
 
-      <section id="tab-req" class="panel" style="display:none">
+      
+      <section id="tab-reports" class="panel" style="display:none">
+        <div class="panelHead">
+          <div class="panelTitle">Отчёты по питанию и затратам</div>
+          <div class="actions"></div>
+        </div>
+
+        <div class="reportBox">
+          <textarea id="reportText" class="textarea" rows="6" placeholder="Введите текст отчёта..."></textarea>
+          <div class="reportActions">
+            <button class="btn" id="sendReportBtn">Сохранить</button>
+          </div>
+
+          <div class="reportListTitle">Сохранённые отчёты</div>
+          <div id="reportsList" class="list"></div>
+          <div id="reportsEmpty" class="empty" style="display:none">Пока нет отчётов</div>
+        </div>
+      </section>
+
+<section id="tab-req" class="panel" style="display:none">
         <div class="panelHead">
           <div class="panelTitle">Согласование заявок на закупки</div>
           <div class="actions">
@@ -103,17 +135,10 @@
       return r.json();
     }
 
-    function setReportLinks(){
-      const from = $('from').value;
-      const to = $('to').value;
-      $('repNutrition').href = `/api/admin/reports/nutrition.csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
-      $('repCosts').href = `/api/admin/reports/costs.csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
-    }
-
     async function loadStats(){
       const from = $('from').value;
       const to = $('to').value;
-      setReportLinks();
+      
       const data = await getJSON(`/api/admin/stats?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
       if(!data.ok) return;
 
@@ -155,8 +180,7 @@
       el.innerHTML = `
         <div class="reqMain">
           <div class="reqTitle">${escapeHtml(pr.title)}</div>
-          <div class="reqMeta">${escapeHtml(pr.created_by||'')} • ${new Date(pr.created_at).toLocaleString('ru-RU')} • ${fmt(pr.amount)}</div>
-          ${pr.description ? `<div class="reqDesc">${escapeHtml(pr.description)}</div>` : ''}
+          <div class="reqMeta">${escapeHtml(pr.created_by||'')} • ${new Date(pr.created_at).toLocaleString('ru-RU')} • ${pr.amount}</div>
         </div>
         <div class="reqActions"></div>
       `;
@@ -214,8 +238,10 @@
         b.classList.add('active');
         const t = b.getAttribute('data-tab');
         $('tab-stats').style.display = t==='stats' ? '' : 'none';
+        $('tab-reports').style.display = t==='reports' ? '' : 'none';
         $('tab-req').style.display = t==='req' ? '' : 'none';
         if(t==='stats') loadStats();
+        if(t==='reports') loadReports();
         if(t==='req') loadRequests();
       };
     });
@@ -223,11 +249,59 @@
     $('reqFilter').onchange = loadRequests;
     $('apply').onclick = ()=>{ loadStats(); loadRequests(); };
 
-    // init
     $('to').value = isoToday();
     $('from').value = isoDaysAgo(29);
     loadStats();
     loadRequests();
-  </script>
+  
+    function escHtml(s){
+      return (s||"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+    }
+
+    async function loadReports(){
+      const box = $("reportsList");
+      const empty = $("reportsEmpty");
+      if (!box || !empty) return;
+
+      box.innerHTML = "";
+      empty.style.display = "none";
+
+      const data = await getJSON("/api/admin/reports");
+      if(!data.ok){
+        empty.style.display = "block";
+        empty.textContent = data.error || "Ошибка загрузки отчётов";
+        return;
+      }
+      if(!data.items || data.items.length===0){
+        empty.style.display = "block";
+        return;
+      }
+      data.items.forEach(r=>{
+        const el = document.createElement("div");
+        el.className = "listItem";
+        el.innerHTML = `<div class="muted">${r.created_at || ""}</div><div style="margin-top:6px; white-space:pre-wrap;">${escHtml(r.text)}</div>`;
+        box.appendChild(el);
+      });
+    }
+
+    async function sendReport(){
+      const ta = $("reportText");
+      if(!ta) return;
+      const text = (ta.value||"").trim();
+      if(!text){ alert("Введите текст отчёта"); return; }
+
+      const data = await postJSON("/api/admin/reports", {text});
+      if(!data.ok){ alert(data.error || "Ошибка"); return; }
+      ta.value="";
+      await loadReports();
+    }
+
+    document.addEventListener("click",(e)=>{
+      const btn = e.target.closest && e.target.closest("#sendReportBtn");
+      if(btn) sendReport();
+    });
+
+</script>
+<script src="{{ url_for('static', filename='notifications.js') }}"></script>
 </body>
 </html>

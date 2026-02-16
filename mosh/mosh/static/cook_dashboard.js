@@ -1,7 +1,7 @@
-// Базовый URL для API
+
 const API_URL = '/api/cook';
 
-// Инициализация при загрузке
+
 document.addEventListener('DOMContentLoaded', function() {
     initApp();
     setupEventListeners();
@@ -136,18 +136,33 @@ async function issueOrder(orderId) {
             body: JSON.stringify({ orderId })
         });
 
-        const data = await response.json();
+        let data = null;
+        try {
+            data = await response.json();
+        } catch (e) {
+            data = null;
+        }
 
-        if (data.success) {
-            alert(data.message || `Блюдо "${data.order.name}" выдано`);
+        if (!response.ok) {
+            const msg = (data && (data.error || data.message)) || `Ошибка: ${response.status}`;
+            alert(msg);
+            return;
+        }
 
-            // Обновляем список заказов
-            loadOrders();
+        if (!data || data.success !== true) {
+            const msg = (data && (data.error || data.message)) || 'Не удалось выдать блюдо';
+            alert(msg);
+            return;
+        }
 
-            // КОНТРОЛЬ ОСТАТКОВ: обновляем таблицу продуктов если она открыта
-            if (document.getElementById('warehouse').classList.contains('active')) {
-                loadProducts();
-            }
+        alert(data.message || `Блюдо "${(data.order && data.order.name) ? data.order.name : ''}" выдано`);
+
+        
+        loadOrders();
+
+        
+        if (document.getElementById('warehouse').classList.contains('active')) {
+            loadProducts();
         }
     } catch (error) {
         console.error('Ошибка выдачи заказа:', error);
@@ -254,6 +269,7 @@ function displayRequests(requests) {
 async function submitRequest() {
     const productName = document.getElementById('productName').value.trim();
     const quantity = document.getElementById('productQuantity').value.trim();
+    const unit = document.getElementById('productUnit').value;
 
     if (!productName || !quantity) {
         alert('Заполните все поля');
@@ -266,7 +282,7 @@ async function submitRequest() {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ productName, quantity })
+            body: JSON.stringify({ productName, quantity, unit })
         });
 
         const data = await response.json();
@@ -276,6 +292,7 @@ async function submitRequest() {
 
             document.getElementById('productName').value = '';
             document.getElementById('productQuantity').value = '';
+            if(document.getElementById('productUnit')) document.getElementById('productUnit').value = 'шт';
             document.getElementById('requestForm').classList.remove('active');
 
             loadRequests();

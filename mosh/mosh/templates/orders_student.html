@@ -5,6 +5,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>Мои заказы</title>
 	<link rel="stylesheet" href="{{ url_for('static', filename='orders_student.css') }}">
+	<link rel="stylesheet" href="{{ url_for('static', filename='notifications.css') }}">
 </head>
 <body>
 	<header>
@@ -22,6 +23,7 @@
 			{% else %}
 				<button class="sub_btn" id="open_subscribe">Купить абонемент</button>
 			{% endif %}
+			{% include "_notifications_widget.html" %}
 			<a class="logout" href="{{ url_for('logout') }}">Выйти</a>
 		</div>
 	</header>
@@ -53,13 +55,13 @@
 					<div class="order_right">
 						{% if o.status == "preparing" %}
 							<div class="badge badge_wait">Готовится</div>
-							<button class="pick_btn" disabled>Забрать заказ</button>
-						{% elif o.status == "ready" %}
-							<div class="badge badge_ready">Готово</div>
-							<button class="pick_btn" data-id="{{ o.id }}">Забрать заказ</button>
+							<button class="pick_btn" disabled>Получить</button>
+						{% elif o.status == "issued" %}
+							<div class="badge badge_ready">Выдано</div>
+							<button class="pick_btn" data-id="{{ o.id }}">Получено</button>
 						{% else %}
-							<div class="badge badge_done">Забран</div>
-							<button class="pick_btn" disabled>Забрано</button>
+							<div class="badge badge_done">Получено</div>
+							<button class="pick_btn" disabled>Получено</button>
 						{% endif %}
 					</div>
 				</div>
@@ -88,5 +90,6 @@
 			}
 		})
 	</script>
+	<script src="{{ url_for('static', filename='notifications.js') }}"></script>
 </body>
 </html>

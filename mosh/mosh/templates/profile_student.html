@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Профиль</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='profile_student.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='notifications.css') }}">
 </head>
 <body>
   <div class="page">
@@ -23,6 +24,7 @@
         {% else %}
           <a class="sub_btn" href="{{ url_for('main_student') }}">Купить абонемент</a>
         {% endif %}
+        {% include "_notifications_widget.html" %}
         <a class="logout" href="{{ url_for('logout') }}">Выйти</a>
       </div>
     </div>
@@ -82,6 +84,7 @@
       };
     });
   </script>
+  <script src="{{ url_for('static', filename='notifications.js') }}"></script>
 
 </body>
 </html>
